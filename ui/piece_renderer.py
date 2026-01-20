@@ -57,21 +57,42 @@ class PieceRenderer:
 
         # 棋子颜色
         piece_color = config.PIECE_COLORS[piece.color]
-        bg_color = (255, 255, 220) if piece.color == 'red' else (50, 50, 50)
-        border_color = (0, 0, 0)
+        bg_color = config.PIECE_BG_COLORS[piece.color]
+        border_color = config.PIECE_BORDER_COLORS[piece.color]
 
-        # 绘制棋子圆形背景
-        pygame.draw.circle(self.surface, bg_color,
-                         (x, y), config.PIECE_RADIUS)
+        # 绘制阴影
+        shadow_offset = 3
+        shadow_surface = pygame.Surface((config.PIECE_RADIUS * 2 + 10, config.PIECE_RADIUS * 2 + 10), pygame.SRCALPHA)
+        pygame.draw.circle(shadow_surface, (0, 0, 0, 60),
+                         (config.PIECE_RADIUS + 5, config.PIECE_RADIUS + 5), config.PIECE_RADIUS)
+        self.surface.blit(shadow_surface, (x - config.PIECE_RADIUS - 5 + shadow_offset,
+                                          y - config.PIECE_RADIUS - 5 + shadow_offset))
 
-        # 绘制棋子边框
+        # 绘制棋子圆形背景（带渐变效果）
+        for i in range(config.PIECE_RADIUS, 0, -2):
+            ratio = i / config.PIECE_RADIUS
+            # 创建从中心到边缘的渐变
+            r = int(bg_color[0] * ratio + 255 * (1 - ratio) * 0.1)
+            g = int(bg_color[1] * ratio + 255 * (1 - ratio) * 0.1)
+            b = int(bg_color[2] * ratio + 255 * (1 - ratio) * 0.1)
+            pygame.draw.circle(self.surface, (r, g, b), (x, y), i)
+
+        # 绘制外边框（双层）
         pygame.draw.circle(self.surface, border_color,
-                         (x, y), config.PIECE_RADIUS, 3)
+                         (x, y), config.PIECE_RADIUS, 4)
+        pygame.draw.circle(self.surface, (200, 180, 140),
+                         (x, y), config.PIECE_RADIUS - 4, 2)
 
         # 绘制棋子文字
         text = piece.get_chinese_name()
         font = self.font_large if len(text) == 1 else self.font_medium
 
+        # 文字阴影
+        shadow_text = font.render(text, True, (0, 0, 0, 100))
+        shadow_rect = shadow_text.get_rect(center=(x + 1, y + 1))
+        self.surface.blit(shadow_text, shadow_rect)
+
+        # 主文字
         text_surface = font.render(text, True, piece_color)
         text_rect = text_surface.get_rect(center=(x, y))
         self.surface.blit(text_surface, text_rect)
@@ -86,23 +107,23 @@ class PieceRenderer:
             mouse_y: 鼠标Y坐标
         """
         piece_color = config.PIECE_COLORS[piece.color]
-        bg_color = (255, 255, 220) if piece.color == 'red' else (50, 50, 50)
-        border_color = (0, 0, 0)
+        bg_color = config.PIECE_BG_COLORS[piece.color]
+        border_color = config.PIECE_BORDER_COLORS[piece.color]
 
-        # 绘制半透明效果
-        s = pygame.Surface((config.PIECE_RADIUS * 2, config.PIECE_RADIUS * 2))
-        s.set_alpha(200)
-        s.fill(config.COLOR_BG)
+        # 绘制阴影
+        shadow_surface = pygame.Surface((config.PIECE_RADIUS * 2 + 20, config.PIECE_RADIUS * 2 + 20), pygame.SRCALPHA)
+        pygame.draw.circle(shadow_surface, (0, 0, 0, 80),
+                         (config.PIECE_RADIUS + 10, config.PIECE_RADIUS + 10), config.PIECE_RADIUS + 2)
+        self.surface.blit(shadow_surface, (mouse_x - config.PIECE_RADIUS - 10 + 5,
+                                          mouse_y - config.PIECE_RADIUS - 10 + 5))
 
-        pygame.draw.circle(s, bg_color,
-                         (config.PIECE_RADIUS, config.PIECE_RADIUS),
-                         config.PIECE_RADIUS)
-        pygame.draw.circle(s, border_color,
-                         (config.PIECE_RADIUS, config.PIECE_RADIUS),
-                         config.PIECE_RADIUS, 3)
+        # 绘制棋子背景
+        pygame.draw.circle(self.surface, bg_color,
+                         (mouse_x, mouse_y), config.PIECE_RADIUS)
 
-        self.surface.blit(s, (mouse_x - config.PIECE_RADIUS,
-                             mouse_y - config.PIECE_RADIUS))
+        # 绘制边框
+        pygame.draw.circle(self.surface, border_color,
+                         (mouse_x, mouse_y), config.PIECE_RADIUS, 4)
 
         # 绘制文字
         text = piece.get_chinese_name()

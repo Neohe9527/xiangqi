@@ -9,6 +9,9 @@ from ui.board_renderer import BoardRenderer
 from ui.piece_renderer import PieceRenderer
 from ui.info_panel import InfoPanel
 from ui.menu import Menu, GameModeDialog, GameOverDialog
+from ui.animation import AnimationManager, PieceAnimation
+from ui.sound_manager import SoundManager
+from ui.piece_images import PieceImageGenerator
 
 
 class GameWindow:
@@ -31,6 +34,23 @@ class GameWindow:
         # 渲染器
         self.board_renderer = BoardRenderer(self.screen, 0, 0)
         self.piece_renderer = PieceRenderer(self.screen, self.board_renderer)
+
+        # 动画管理器
+        self.animation_manager = AnimationManager()
+
+        # 音效管理器
+        try:
+            self.sound_manager = SoundManager()
+        except Exception as e:
+            print(f"音效初始化失败: {e}")
+            self.sound_manager = None
+
+        # 棋子图片生成器
+        try:
+            self.piece_image_generator = PieceImageGenerator()
+        except Exception as e:
+            print(f"棋子图片生成失败: {e}")
+            self.piece_image_generator = None
 
         # 信息面板
         panel_x = config.BOARD_WIDTH + 20
@@ -143,19 +163,43 @@ class GameWindow:
 
     def _handle_board_click(self, pos):
         """处理棋盘点击"""
+        # 如果有动画正在播放，不处理点击
+        if self.animation_manager.has_active_animations():
+            return
+
         board_pos = self.board_renderer.get_board_pos(pos[0], pos[1])
         if board_pos:
             row, col = board_pos
-            self.game_manager.handle_click(row, col)
+            result = self.game_manager.handle_click(row, col)
+
+            # 如果成功执行了走法，播放音效
+            if result and self.sound_manager:
+                # 检查是否吃子
+                last_move = self.game_manager.last_move
+                if last_move and last_move.captured_piece:
+                    self.sound_manager.play('capture')
+                else:
+                    self.sound_manager.play('move')
+
+                # 检查是否将军
+                if self.game_manager.is_in_check():
+                    self.sound_manager.play('check')
 
     def update(self):
         """更新游戏状态"""
+        # 更新动画
+        self.animation_manager.update()
+
         # 如果模式选择对话框活跃，暂停游戏逻辑
         if self.mode_dialog.active:
             return
 
         # 检查游戏是否结束（只显示一次对话框）
         if self.game_manager.game_result != 'ongoing' and not self.game_over_shown:
+            # 播放胜利音效
+            if self.sound_manager:
+                self.sound_manager.play('win')
+
             # 获取获胜方名称
             winner = None
             if self.game_manager.game_result == 'red_win':
@@ -180,9 +224,34 @@ class GameWindow:
         if self.game_over_dialog.active:
             return
 
+        # 如果有动画正在播放，不执行AI移动
+        if self.animation_manager.has_active_animations():
+            return
+
         # 如果AI思考完成，先执行走法
         if self.ai_move is not None and not self.ai_thinking:
+            # 创建移动动画
+            move = self.ai_move
+            piece = self.game_manager.board.get_piece(move.from_row, move.from_col)
+            if piece:
+                from_pos = self.board_renderer.get_screen_pos(move.from_row, move.from_col)
+                to_pos = self.board_renderer.get_screen_pos(move.to_row, move.to_col)
+                animation = PieceAnimation(piece, from_pos, to_pos, duration=0.3)
+                self.animation_manager.add_animation(animation)
+
+            # 执行走法
             self.game_manager.make_move(self.ai_move)
+
+            # 播放音效
+            if self.sound_manager:
+                if self.ai_move.captured_piece:
+                    self.sound_manager.play('capture')
+                else:
+                    self.sound_manager.play('move')
+
+                if self.game_manager.is_in_check():
+                    self.sound_manager.play('check')
+
             self.ai_move = None
 
         # 如果游戏正在进行且当前是AI回合
@@ -202,8 +271,8 @@ class GameWindow:
         # 绘制棋盘
         self.board_renderer.draw(self.game_manager)
 
-        # 绘制棋子
-        self.piece_renderer.draw(self.game_manager.board)
+        # 绘制棋子（包括动画中的棋子）
+        self._draw_pieces_with_animation()
 
         # 绘制信息面板
         self.info_panel.draw(self.game_manager)
@@ -219,6 +288,62 @@ class GameWindow:
 
         # 更新显示
         pygame.display.flip()
+
+    def _draw_pieces_with_animation(self):
+        """绘制棋子（包括动画）"""
+        # 获取所有活跃的动画
+        active_animations = self.animation_manager.get_active_animations()
+        animating_pieces = [anim.piece for anim in active_animations]
+
+        # 绘制非动画棋子
+        for piece in self.game_manager.board.get_all_pieces():
+            if piece not in animating_pieces:
+                self.piece_renderer._draw_piece(piece)
+
+        # 绘制动画中的棋子
+        for animation in active_animations:
+            current_pos = animation.update()
+            if current_pos:
+                x, y = current_pos
+                piece = animation.piece
+
+                # 使用图片渲染器绘制棋子（如果可用）
+                if self.piece_image_generator:
+                    image = self.piece_image_generator.get_piece_image(piece.color, piece.piece_type)
+                    if image:
+                        image_rect = image.get_rect(center=(int(x), int(y)))
+                        self.screen.blit(image, image_rect)
+                    else:
+                        # 回退到原始渲染
+                        self._draw_piece_at_position(piece, x, y)
+                else:
+                    self._draw_piece_at_position(piece, x, y)
+
+    def _draw_piece_at_position(self, piece, x, y):
+        """在指定位置绘制棋子"""
+        piece_color = config.PIECE_COLORS[piece.color]
+        bg_color = config.PIECE_BG_COLORS[piece.color]
+        border_color = config.PIECE_BORDER_COLORS[piece.color]
+
+        # 绘制棋子背景
+        pygame.draw.circle(self.screen, bg_color, (int(x), int(y)), config.PIECE_RADIUS)
+
+        # 绘制边框
+        pygame.draw.circle(self.screen, border_color, (int(x), int(y)), config.PIECE_RADIUS, 4)
+
+        # 绘制文字
+        text = piece.get_chinese_name()
+        try:
+            font = pygame.font.Font('/System/Library/Fonts/STHeiti Medium.ttc', 32)
+        except:
+            try:
+                font = pygame.font.SysFont('simhei', 32)
+            except:
+                font = pygame.font.Font(None, 36)
+
+        text_surface = font.render(text, True, piece_color)
+        text_rect = text_surface.get_rect(center=(int(x), int(y)))
+        self.screen.blit(text_surface, text_rect)
 
     def run(self):
         """运行游戏主循环"""

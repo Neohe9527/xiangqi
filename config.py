@@ -13,22 +13,34 @@ BOARD_HEIGHT = 900
 BOARD_MARGIN = 50
 CELL_SIZE = 80
 
-# 颜色配置
-COLOR_BG = (245, 222, 179)  # 棋盘背景色
-COLOR_LINE = (139, 69, 19)  # 棋盘线条色
-COLOR_SELECTED = (255, 255, 0)  # 选中棋子高亮色
-COLOR_LEGAL_MOVE = (0, 255, 0, 100)  # 合法走法提示色
-COLOR_CHECK = (255, 0, 0)  # 将军提示色
-COLOR_TEXT = (0, 0, 0)  # 文字颜色
-COLOR_PANEL_BG = (240, 240, 240)  # 信息面板背景色
-COLOR_BUTTON = (100, 149, 237)  # 按钮颜色
-COLOR_BUTTON_HOVER = (70, 130, 220)  # 按钮悬停颜色
+# 颜色配置 - 优雅的中国风配色
+COLOR_BG = (235, 200, 140)  # 棋盘背景色 - 温暖的木色
+COLOR_BG_DARK = (215, 180, 120)  # 棋盘深色背景
+COLOR_LINE = (101, 67, 33)  # 棋盘线条色 - 深棕色
+COLOR_SELECTED = (255, 215, 0)  # 选中棋子高亮色 - 金色
+COLOR_LEGAL_MOVE = (46, 204, 113)  # 合法走法提示色 - 翡翠绿
+COLOR_CHECK = (231, 76, 60)  # 将军提示色 - 朱红色
+COLOR_TEXT = (44, 62, 80)  # 文字颜色 - 深灰蓝
+COLOR_PANEL_BG = (250, 248, 245)  # 信息面板背景色 - 米白色
+COLOR_BUTTON = (52, 152, 219)  # 按钮颜色 - 天蓝色
+COLOR_BUTTON_HOVER = (41, 128, 185)  # 按钮悬停颜色 - 深天蓝
+COLOR_RIVER = (176, 196, 222)  # 河界颜色 - 淡蓝色
 
 # 棋子配置
-PIECE_RADIUS = 35
+PIECE_RADIUS = 38
 PIECE_COLORS = {
-    'red': (220, 20, 60),
-    'black': (0, 0, 0)
+    'red': (192, 57, 43),  # 深红色
+    'black': (44, 62, 80)  # 深灰蓝
+}
+# 棋子背景色
+PIECE_BG_COLORS = {
+    'red': (255, 250, 240),  # 象牙白
+    'black': (245, 245, 220)  # 米黄色
+}
+# 棋子边框色
+PIECE_BORDER_COLORS = {
+    'red': (139, 0, 0),  # 深红
+    'black': (25, 25, 25)  # 深黑
 }
 
 # 棋子类型
