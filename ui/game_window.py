@@ -176,7 +176,7 @@ class GameWindow:
             if result and self.sound_manager:
                 # 检查是否吃子
                 last_move = self.game_manager.last_move
-                if last_move and last_move.captured_piece:
+                if last_move and last_move.captured:
                     self.sound_manager.play('capture')
                 else:
                     self.sound_manager.play('move')
@@ -244,7 +244,7 @@ class GameWindow:
 
             # 播放音效
             if self.sound_manager:
-                if self.ai_move.captured_piece:
+                if self.ai_move.captured:
                     self.sound_manager.play('capture')
                 else:
                     self.sound_manager.play('move')
@@ -309,7 +309,7 @@ class GameWindow:
 
                 # 使用图片渲染器绘制棋子（如果可用）
                 if self.piece_image_generator:
-                    image = self.piece_image_generator.get_piece_image(piece.color, piece.piece_type)
+                    image = self.piece_image_generator.get_piece_image(piece.color, piece.type)
                     if image:
                         image_rect = image.get_rect(center=(int(x), int(y)))
                         self.screen.blit(image, image_rect)
