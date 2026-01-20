@@ -125,16 +125,44 @@ class Evaluator:
         Returns:
             float: 评分（正数表示红方优势，负数表示黑方优势）
         """
+        from core.rules import is_checkmate, get_game_result
+
+        # 首先检查是否已经分出胜负
+        red_result = get_game_result(board, 'red')
+        black_result = get_game_result(board, 'black')
+
+        # 红方胜利 - 给予极高分数
+        if red_result == 'red_win' or black_result == 'red_win':
+            return 100000
+
+        # 黑方胜利 - 给予极低分数
+        if red_result == 'black_win' or black_result == 'black_win':
+            return -100000
+
+        # 和棋
+        if red_result == 'draw' or black_result == 'draw':
+            return 0
+
+        # 检查是否即将被将死（距离胜负只有一步）
+        # 如果对方被将死，给予极高奖励
+        if is_checkmate(board, 'black'):
+            return 50000
+        if is_checkmate(board, 'red'):
+            return -50000
+
         score = 0
 
-        # 1. 子力价值（50%权重）
-        score += self._evaluate_material(board) * 0.5
+        # 1. 子力价值（40%权重）- 降低权重，让AI更注重战术
+        score += self._evaluate_material(board) * 0.4
 
-        # 2. 位置价值（30%权重）
-        score += self._evaluate_position(board) * 0.3
+        # 2. 位置价值（25%权重）
+        score += self._evaluate_position(board) * 0.25
 
         # 3. 将帅安全（20%权重）
         score += self._evaluate_king_safety(board) * 0.2
+
+        # 4. 进攻性评估（15%权重）- 新增：鼓励进攻
+        score += self._evaluate_aggression(board) * 0.15
 
         return score
 
@@ -224,6 +252,88 @@ class Evaluator:
                         if p and p.color == 'black':
                             protection += 1
             score -= protection * 5
+
+        return score
+
+    def _evaluate_aggression(self, board):
+        """
+        评估进攻性 - 鼓励AI主动进攻
+
+        Args:
+            board: 棋盘对象
+
+        Returns:
+            float: 进攻性评分
+        """
+        from core.rules import is_in_check
+
+        score = 0
+
+        # 1. 控制对方半场的棋子数量（鼓励进攻）
+        red_in_enemy = 0
+        black_in_enemy = 0
+
+        for piece in board.get_all_pieces():
+            if piece.color == 'red' and piece.row <= 4:  # 红方在黑方半场
+                red_in_enemy += 1
+                # 过河兵特别奖励
+                if piece.type == 'P':
+                    score += 30
+            elif piece.color == 'black' and piece.row >= 5:  # 黑方在红方半场
+                black_in_enemy += 1
+                if piece.type == 'P':
+                    score -= 30
+
+        score += (red_in_enemy - black_in_enemy) * 15
+
+        # 2. 威胁对方将帅的棋子数量
+        red_king = board.find_king('red')
+        black_king = board.find_king('black')
+
+        if black_king:
+            # 统计能攻击到黑方将帅附近的红方棋子
+            threat_count = 0
+            for piece in board.get_all_pieces():
+                if piece.color == 'red':
+                    moves = piece.get_possible_moves(board)
+                    for move in moves:
+                        # 如果能走到将帅附近3格内
+                        distance = abs(move.to_row - black_king.row) + abs(move.to_col - black_king.col)
+                        if distance <= 3:
+                            threat_count += 1
+                            break
+            score += threat_count * 20
+
+        if red_king:
+            # 统计能攻击到红方将帅附近的黑方棋子
+            threat_count = 0
+            for piece in board.get_all_pieces():
+                if piece.color == 'black':
+                    moves = piece.get_possible_moves(board)
+                    for move in moves:
+                        distance = abs(move.to_row - red_king.row) + abs(move.to_col - red_king.col)
+                        if distance <= 3:
+                            threat_count += 1
+                            break
+            score -= threat_count * 20
+
+        # 3. 控制中心区域（中路3列）
+        red_center_control = 0
+        black_center_control = 0
+
+        for piece in board.get_all_pieces():
+            if 3 <= piece.col <= 5:  # 中路3列
+                if piece.color == 'red':
+                    red_center_control += 1
+                else:
+                    black_center_control += 1
+
+        score += (red_center_control - black_center_control) * 10
+
+        # 4. 活动力评估（可走的合法步数）
+        red_mobility = len(board.get_legal_moves('red'))
+        black_mobility = len(board.get_legal_moves('black'))
+        score += (red_mobility - black_mobility) * 2
 
         return score
 

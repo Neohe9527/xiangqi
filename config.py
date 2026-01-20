@@ -88,9 +88,9 @@ AI_CONFIGS = {
     'alphabeta': {
         'name': '深算国手',
         'difficulty': 4,
-        'description': 'Alpha-Beta剪枝，接近高手水平',
-        'depth': 5,
-        'time_limit': 10
+        'description': 'Alpha-Beta剪枝，强大的求胜欲望',
+        'depth': 6,  # 增加搜索深度
+        'time_limit': 15  # 增加思考时间
     }
 }
 

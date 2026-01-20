@@ -72,9 +72,9 @@ class GameManager:
         elif ai_type == 'greedy':
             return GreedyAI(color)
         elif ai_type == 'minimax':
-            return MinimaxAI(color, depth=2)
+            return MinimaxAI(color, depth=3)
         elif ai_type == 'alphabeta':
-            return AlphaBetaAI(color, depth=4, time_limit=5)
+            return AlphaBetaAI(color, depth=6, time_limit=15)
         else:
             return RandomAI(color)
 

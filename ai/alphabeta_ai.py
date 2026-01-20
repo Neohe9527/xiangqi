@@ -117,6 +117,17 @@ class AlphaBetaAI(BaseAI):
             if cached_depth >= depth:
                 return cached_score
 
+        # 检查游戏是否结束（优先检查，确保AI能识别胜负）
+        from core.rules import is_checkmate, get_game_result
+        current_color = self.color if maximizing else ('black' if self.color == 'red' else 'red')
+
+        # 检查是否被将死
+        if is_checkmate(board, current_color):
+            # 被将死的一方，距离越近惩罚越大（鼓励AI尽快获胜或尽量拖延失败）
+            score = (float('-inf') + depth * 1000) if maximizing else (float('inf') - depth * 1000)
+            self.transposition_table[board_hash] = (depth, score)
+            return score
+
         # 到达搜索深度
         if depth == 0:
             score = self.evaluator.evaluate(board)
@@ -124,17 +135,9 @@ class AlphaBetaAI(BaseAI):
             self.transposition_table[board_hash] = (depth, eval_score)
             return eval_score
 
-        # 检查游戏是否结束
-        from core.rules import is_checkmate
-        current_color = self.color if maximizing else ('black' if self.color == 'red' else 'red')
-
-        if is_checkmate(board, current_color):
-            score = float('-inf') if maximizing else float('inf')
-            self.transposition_table[board_hash] = (depth, score)
-            return score
-
         legal_moves = board.get_legal_moves(current_color)
         if not legal_moves:
+            # 无子可走但未被将死，判和
             self.transposition_table[board_hash] = (depth, 0)
             return 0
 
@@ -178,9 +181,11 @@ class AlphaBetaAI(BaseAI):
 
         优先级：
         1. 上次迭代的最佳走法
-        2. 吃子走法（按被吃棋子价值排序）
-        3. 将军走法
-        4. 其他走法
+        2. 将死对方的走法（最高优先级）
+        3. 吃子走法（按被吃棋子价值排序）
+        4. 将军走法
+        5. 进攻性走法（威胁对方将帅）
+        6. 其他走法
 
         Args:
             board: 棋盘对象
@@ -190,26 +195,52 @@ class AlphaBetaAI(BaseAI):
         Returns:
             list: 排序后的走法列表
         """
-        from core.rules import is_in_check
+        from core.rules import is_in_check, is_checkmate
 
         def move_priority(move):
             priority = 0
 
             # 上次迭代的最佳走法
             if best_move and move == best_move:
-                priority += 10000
+                priority += 100000
+
+            # 执行走法
+            captured = board.make_move(move)
+            opponent_color = 'black' if self.color == 'red' else 'red'
+
+            # 将死对方（最高优先级）
+            if is_checkmate(board, opponent_color):
+                priority += 50000
+
+            # 将军走法
+            elif is_in_check(board, opponent_color):
+                priority += 5000
+
+            # 威胁对方将帅（距离将帅3格内）
+            opponent_king = board.find_king(opponent_color)
+            if opponent_king:
+                distance = abs(move.to_row - opponent_king.row) + abs(move.to_col - opponent_king.col)
+                if distance <= 3:
+                    priority += 1000 - distance * 100  # 距离越近优先级越高
+
+            board.undo_move(move, captured)
 
             # 吃子走法
             if move.captured:
                 captured_value = self.evaluator.piece_values.get(move.captured.type, 0)
-                priority += captured_value * 10
+                attacker_value = self.evaluator.piece_values.get(move.piece.type, 0)
+                # MVV-LVA (Most Valuable Victim - Least Valuable Attacker)
+                priority += captured_value * 100 - attacker_value
 
-            # 将军走法
-            captured = board.make_move(move)
-            opponent_color = 'black' if self.color == 'red' else 'red'
-            if is_in_check(board, opponent_color):
-                priority += 500
-            board.undo_move(move, captured)
+            # 进攻性走法（进入对方半场）
+            if self.color == 'red' and move.to_row <= 4:
+                priority += 50
+            elif self.color == 'black' and move.to_row >= 5:
+                priority += 50
+
+            # 控制中心
+            if 3 <= move.to_col <= 5:
+                priority += 30
 
             return priority
 
