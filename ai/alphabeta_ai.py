@@ -128,12 +128,10 @@ class AlphaBetaAI(BaseAI):
             self.transposition_table[board_hash] = (depth, score)
             return score
 
-        # 到达搜索深度
+        # 到达搜索深度，进行杀棋搜索
         if depth == 0:
-            score = self.evaluator.evaluate(board)
-            eval_score = score if self.color == 'red' else -score
-            self.transposition_table[board_hash] = (depth, eval_score)
-            return eval_score
+            # 使用杀棋搜索而不是直接评估
+            return self._quiescence_search(board, alpha, beta, maximizing, 4)
 
         legal_moves = board.get_legal_moves(current_color)
         if not legal_moves:
@@ -245,3 +243,117 @@ class AlphaBetaAI(BaseAI):
             return priority
 
         return sorted(moves, key=move_priority, reverse=True)
+
+    def _quiescence_search(self, board, alpha, beta, maximizing, depth):
+        """
+        杀棋搜索（Quiescence Search）
+        在叶子节点继续搜索吃子和将军走法，避免水平线效应
+
+        Args:
+            board: 棋盘对象
+            alpha: Alpha 值
+            beta: Beta 值
+            maximizing: 是否是最大化节点
+            depth: 剩余搜索深度
+
+        Returns:
+            float: 评分
+        """
+        # 先进行静态评估
+        stand_pat = self.evaluator.evaluate(board)
+        stand_pat = stand_pat if self.color == 'red' else -stand_pat
+
+        # 检查时间限制
+        if time.time() - self.start_time > self.time_limit:
+            return stand_pat
+
+        # 达到杀棋搜索深度限制
+        if depth <= 0:
+            return stand_pat
+
+        # Beta 剪枝
+        if maximizing:
+            if stand_pat >= beta:
+                return beta
+            if stand_pat > alpha:
+                alpha = stand_pat
+        else:
+            if stand_pat <= alpha:
+                return alpha
+            if stand_pat < beta:
+                beta = stand_pat
+
+        # 获取当前玩家
+        current_color = self.color if maximizing else ('black' if self.color == 'red' else 'red')
+
+        # 只搜索吃子和将军走法
+        legal_moves = board.get_legal_moves(current_color)
+        tactical_moves = self._get_tactical_moves(board, legal_moves, current_color)
+
+        # 如果没有战术走法，返回静态评估
+        if not tactical_moves:
+            return stand_pat
+
+        # 对战术走法排序
+        tactical_moves = self._order_moves(board, tactical_moves)
+
+        if maximizing:
+            max_eval = stand_pat
+            for move in tactical_moves:
+                captured = board.make_move(move)
+                eval_score = self._quiescence_search(board, alpha, beta, False, depth - 1)
+                board.undo_move(move, captured)
+
+                max_eval = max(max_eval, eval_score)
+                alpha = max(alpha, eval_score)
+
+                if beta <= alpha:
+                    break
+
+            return max_eval
+        else:
+            min_eval = stand_pat
+            for move in tactical_moves:
+                captured = board.make_move(move)
+                eval_score = self._quiescence_search(board, alpha, beta, True, depth - 1)
+                board.undo_move(move, captured)
+
+                min_eval = min(min_eval, eval_score)
+                beta = min(beta, eval_score)
+
+                if beta <= alpha:
+                    break
+
+            return min_eval
+
+    def _get_tactical_moves(self, board, moves, color):
+        """
+        获取战术走法（吃子和将军）
+
+        Args:
+            board: 棋盘对象
+            moves: 所有合法走法
+            color: 当前颜色
+
+        Returns:
+            list: 战术走法列表
+        """
+        from core.rules import is_in_check
+
+        tactical_moves = []
+        opponent_color = 'black' if color == 'red' else 'red'
+
+        for move in moves:
+            # 吃子走法
+            if move.captured:
+                tactical_moves.append(move)
+                continue
+
+            # 将军走法
+            captured = board.make_move(move)
+            if is_in_check(board, opponent_color):
+                tactical_moves.append(move)
+            board.undo_move(move, captured)
+
+        return tactical_moves
+
