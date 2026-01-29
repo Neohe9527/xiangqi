@@ -3,7 +3,20 @@
   "installCommand": "cd frontend && npm install",
   "outputDirectory": "frontend/dist",
   "framework": "vite",
+  "functions": {
+    "api/**/*.py": {
+      "runtime": "python3.11"
+    }
+  },
   "rewrites": [
+    {
+      "source": "/api/v1/(.*)",
+      "destination": "/api/v1.py"
+    },
+    {
+      "source": "/ws/(.*)",
+      "destination": "/api/v1.py"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
