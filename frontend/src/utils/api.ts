@@ -3,28 +3,44 @@
  */
 
 import type { GameState, AIType, AIConfig } from '../types/game';
+import { mockAPI } from './mockApi';
 
 const API_BASE = '/api/v1';
+let useMockAPI = false;
 
 export async function createGame(
   aiType: AIType = 'alphabeta',
   playerColor: 'red' | 'black' = 'red'
 ): Promise<{ game_id: string; game_state: GameState; ai_config: AIConfig }> {
-  const response = await fetch(`${API_BASE}/games`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ai_type: aiType, player_color: playerColor }),
-  });
+  // Check if we should use mock API
+  if (!useMockAPI) {
+    try {
+      const response = await fetch(`${API_BASE}/games`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai_type: aiType, player_color: playerColor }),
+        signal: AbortSignal.timeout(5000),
+      });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to create game');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create game');
+      }
+
+      return response.json();
+    } catch (e) {
+      console.warn('Backend unavailable, using mock API:', e);
+      useMockAPI = true;
+      return mockAPI.createGame(aiType, playerColor);
+    }
   }
 
-  return response.json();
+  return mockAPI.createGame(aiType, playerColor);
 }
 
 export async function getGame(gameId: string): Promise<GameState> {
+  if (useMockAPI) return mockAPI.getGame();
+
   const response = await fetch(`${API_BASE}/games/${gameId}`);
 
   if (!response.ok) {
@@ -42,6 +58,8 @@ export async function makeMove(
   toRow: number,
   toCol: number
 ): Promise<{ success: boolean; move_info: unknown; game_state: GameState }> {
+  if (useMockAPI) return mockAPI.makeMove(gameId, fromRow, fromCol, toRow, toCol);
+
   const response = await fetch(`${API_BASE}/games/${gameId}/moves`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -64,6 +82,8 @@ export async function makeMove(
 export async function requestAIMove(
   gameId: string
 ): Promise<{ success: boolean; move_info: unknown; thinking_info: unknown; game_state: GameState }> {
+  if (useMockAPI) return mockAPI.requestAIMove(gameId);
+
   const response = await fetch(`${API_BASE}/games/${gameId}/ai-move`, {
     method: 'POST',
   });
@@ -80,6 +100,8 @@ export async function undoMove(
   gameId: string,
   steps: number = 2
 ): Promise<{ success: boolean; game_state: GameState }> {
+  if (useMockAPI) return mockAPI.undoMove(gameId, steps);
+
   const response = await fetch(`${API_BASE}/games/${gameId}/undo`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -99,6 +121,8 @@ export async function getLegalMoves(
   row: number,
   col: number
 ): Promise<{ legal_moves: [number, number][] }> {
+  if (useMockAPI) return mockAPI.getLegalMoves(gameId, row, col);
+
   const response = await fetch(`${API_BASE}/games/${gameId}/legal-moves`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -114,6 +138,8 @@ export async function getLegalMoves(
 }
 
 export async function getAITypes(): Promise<Record<string, AIConfig>> {
+  if (useMockAPI) return mockAPI.getAITypes();
+
   const response = await fetch(`${API_BASE}/games/config/ai-types`);
 
   if (!response.ok) {
