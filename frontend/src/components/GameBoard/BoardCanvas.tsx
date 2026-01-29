@@ -7,12 +7,10 @@ import type { Piece, Position } from '../../types/game';
 import {
   BOARD_ROWS,
   BOARD_COLS,
-  CELL_SIZE,
   BOARD_PADDING,
   PIECE_RADIUS,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
-  COLORS,
   PIECE_NAMES,
   posToCanvas,
   canvasToPos,
@@ -25,7 +23,6 @@ interface BoardCanvasProps {
   lastMove: { from: [number, number]; to: [number, number] } | null;
   isCheck: boolean;
   currentTurn: 'red' | 'black';
-  playerColor: 'red' | 'black';
   onCellClick: (row: number, col: number) => void;
 }
 
@@ -50,7 +47,6 @@ export function BoardCanvas({
   lastMove,
   isCheck,
   currentTurn,
-  playerColor,
   onCellClick,
 }: BoardCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

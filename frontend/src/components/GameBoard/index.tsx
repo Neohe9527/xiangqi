@@ -10,7 +10,7 @@ interface GameBoardProps {
 }
 
 export function GameBoard({ onCellClick }: GameBoardProps) {
-  const { gameState, selectedPiece, legalMoves, playerColor } = useGameStore();
+  const { gameState, selectedPiece, legalMoves } = useGameStore();
 
   if (!gameState) {
     return (
@@ -28,7 +28,6 @@ export function GameBoard({ onCellClick }: GameBoardProps) {
       lastMove={gameState.last_move}
       isCheck={gameState.is_check}
       currentTurn={gameState.current_turn}
-      playerColor={playerColor}
       onCellClick={onCellClick}
     />
   );
