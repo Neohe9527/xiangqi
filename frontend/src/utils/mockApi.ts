@@ -2,7 +2,7 @@
  * Mock API for demonstration when backend is not available
  */
 
-import type { GameState, AIType, AIConfig } from '../types/game';
+import type { GameState, AIType, AIConfig, Piece } from '../types/game';
 
 // Mock game state
 const createMockGameState = (): GameState => ({
@@ -68,6 +68,179 @@ const createMockGameState = (): GameState => ({
   ai_type: 'alphabeta',
   player_color: 'red',
 });
+
+// Helper function to get legal moves for a piece
+function getLegalMovesForPiece(
+  board: (Piece | null)[][],
+  row: number,
+  col: number
+): [number, number][] {
+  const piece = board[row]?.[col];
+  if (!piece) return [];
+
+  const moves: [number, number][] = [];
+  const { type, color } = piece;
+
+  const addMove = (r: number, c: number) => {
+    if (r >= 0 && r < 10 && c >= 0 && c < 9) {
+      const target = board[r]?.[c];
+      if (!target || target.color !== color) {
+        moves.push([r, c]);
+      }
+    }
+  };
+
+  const addMovesInDirection = (dr: number, dc: number, maxDistance: number = 10) => {
+    for (let i = 1; i < maxDistance; i++) {
+      const r = row + dr * i;
+      const c = col + dc * i;
+      if (r < 0 || r >= 10 || c < 0 || c >= 9) break;
+
+      const target = board[r]?.[c];
+      if (!target) {
+        moves.push([r, c]);
+      } else {
+        if (target.color !== color) {
+          moves.push([r, c]);
+        }
+        break;
+      }
+    }
+  };
+
+  switch (type) {
+    case 'K': // 将/帅 - 在九宫格内移动一步
+      {
+        const [rowMin, rowMax] = color === 'red' ? [7, 9] : [0, 2];
+        const [colMin, colMax] = [3, 5];
+        const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (const [dr, dc] of directions) {
+          const r = row + dr;
+          const c = col + dc;
+          if (r >= rowMin && r <= rowMax && c >= colMin && c <= colMax) {
+            addMove(r, c);
+          }
+        }
+      }
+      break;
+
+    case 'A': // 士 - 在九宫格内斜着走
+      {
+        const [rowMin, rowMax] = color === 'red' ? [7, 9] : [0, 2];
+        const [colMin, colMax] = [3, 5];
+        const directions = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+        for (const [dr, dc] of directions) {
+          const r = row + dr;
+          const c = col + dc;
+          if (r >= rowMin && r <= rowMax && c >= colMin && c <= colMax) {
+            addMove(r, c);
+          }
+        }
+      }
+      break;
+
+    case 'E': // 象/相 - 走田字，不能过河
+      {
+        const rowLimit = color === 'red' ? 5 : 4;
+        const directions = [[2, 2], [2, -2], [-2, 2], [-2, -2]];
+        for (const [dr, dc] of directions) {
+          const r = row + dr;
+          const c = col + dc;
+          if (r >= 0 && r < 10 && c >= 0 && c < 9) {
+            // 检查是否过河
+            if ((color === 'red' && r >= rowLimit) || (color === 'black' && r <= rowLimit)) {
+              // 检查象眼是否被堵
+              const eyeR = row + dr / 2;
+              const eyeC = col + dc / 2;
+              if (!board[eyeR]?.[eyeC]) {
+                addMove(r, c);
+              }
+            }
+          }
+        }
+      }
+      break;
+
+    case 'H': // 马 - 走日字
+      {
+        const directions = [
+          [1, 2], [1, -2], [-1, 2], [-1, -2],
+          [2, 1], [2, -1], [-2, 1], [-2, -1],
+        ];
+        for (const [dr, dc] of directions) {
+          const r = row + dr;
+          const c = col + dc;
+          if (r >= 0 && r < 10 && c >= 0 && c < 9) {
+            // 检查马腿是否被堵
+            const legR = row + (dr > 0 ? 1 : dr < 0 ? -1 : 0);
+            const legC = col + (dc > 0 ? 1 : dc < 0 ? -1 : 0);
+            if (!board[legR]?.[legC]) {
+              addMove(r, c);
+            }
+          }
+        }
+      }
+      break;
+
+    case 'R': // 车 - 直线移动任意距离
+      {
+        const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (const [dr, dc] of directions) {
+          addMovesInDirection(dr, dc);
+        }
+      }
+      break;
+
+    case 'C': // 炮 - 移动时不能越子，吃子时必须隔一个子
+      {
+        const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (const [dr, dc] of directions) {
+          let jumped = false;
+          for (let i = 1; i < 10; i++) {
+            const r = row + dr * i;
+            const c = col + dc * i;
+            if (r < 0 || r >= 10 || c < 0 || c >= 9) break;
+
+            const target = board[r]?.[c];
+            if (!jumped) {
+              if (!target) {
+                moves.push([r, c]);
+              } else {
+                jumped = true;
+              }
+            } else {
+              if (target && target.color !== color) {
+                moves.push([r, c]);
+              }
+              break;
+            }
+          }
+        }
+      }
+      break;
+
+    case 'P': // 兵/卒 - 过河前只能前进，过河后可以左右移动
+      {
+        const [forward, riverLine] = color === 'red' ? [-1, 4] : [1, 5];
+        const crossed = color === 'red' ? row <= riverLine : row >= riverLine;
+
+        // 向前走
+        const r = row + forward;
+        if (r >= 0 && r < 10) {
+          addMove(r, col);
+        }
+
+        // 如果已过河，可以左右走
+        if (crossed) {
+          addMove(row, col - 1);
+          addMove(row, col + 1);
+        }
+      }
+      break;
+  }
+
+  return moves;
+}
 
 export const mockAPI = {
   async createGame(
@@ -152,9 +325,8 @@ export const mockAPI = {
   ): Promise<{ legal_moves: [number, number][] }> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const moves: [number, number][] = [];
-        if (row + 1 < 10) moves.push([row + 1, col]);
-        if (col + 1 < 9) moves.push([row, col + 1]);
+        const gameState = createMockGameState();
+        const moves = getLegalMovesForPiece(gameState.board, row, col);
         resolve({
           legal_moves: moves,
         });
