@@ -203,16 +203,26 @@ function getLegalMovesForPiece(
 
             const target = board[r]?.[c];
             if (!jumped) {
+              // 还没跳过棋子
               if (!target) {
+                // 空位，可以移动
                 moves.push([r, c]);
               } else {
+                // 遇到棋子，标记为已跳过
                 jumped = true;
               }
             } else {
-              if (target && target.color !== color) {
-                moves.push([r, c]);
+              // 已经跳过一个棋子
+              if (target) {
+                // 遇到第二个棋子
+                if (target.color !== color) {
+                  // 对方棋子，可以吃
+                  moves.push([r, c]);
+                }
+                // 无论如何都要停止（己方或对方棋子都停止）
+                break;
               }
-              break;
+              // 如果是空位，继续寻找下一个棋子
             }
           }
         }
@@ -244,6 +254,95 @@ function getLegalMovesForPiece(
 
 // Store game state for mock API
 let currentGameState: GameState | null = null;
+
+// Piece values for AI evaluation
+const PIECE_VALUES: Record<string, number> = {
+  'K': 10000, // 将/帅
+  'A': 200,   // 士
+  'E': 200,   // 象
+  'H': 400,   // 马
+  'R': 500,   // 车
+  'C': 450,   // 炮
+  'P': 100,   // 兵/卒
+};
+
+// Evaluate a move: returns score (higher is better for AI)
+function evaluateMove(
+  board: (Piece | null)[][],
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  aiColor: 'red' | 'black'
+): number {
+  let score = 0;
+
+  // Check if this move captures a piece
+  const targetPiece = board[toRow]?.[toCol];
+  if (targetPiece && targetPiece.color !== aiColor) {
+    // Prioritize capturing valuable pieces
+    score += (PIECE_VALUES[targetPiece.type] || 0) * 10;
+  }
+
+  // Prefer moving pieces that are under attack (defensive)
+  const piece = board[fromRow]?.[fromCol];
+  if (piece) {
+    // Bonus for moving pieces forward (aggressive)
+    if (aiColor === 'red' && toRow < fromRow) {
+      score += 5;
+    } else if (aiColor === 'black' && toRow > fromRow) {
+      score += 5;
+    }
+
+    // Bonus for protecting the king
+    if (piece.type === 'K') {
+      score += 1000; // King moves are important
+    }
+  }
+
+  // Add some randomness to avoid predictable play
+  score += Math.random() * 10;
+
+  return score;
+}
+
+// Get best move for AI
+function getBestAIMove(
+  board: (Piece | null)[][],
+  aiColor: 'red' | 'black'
+): { from: [number, number]; to: [number, number] } | null {
+  const possibleMoves: Array<{
+    from: [number, number];
+    to: [number, number];
+    score: number;
+  }> = [];
+
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r]?.[c];
+      if (piece && piece.color === aiColor) {
+        const moves = getLegalMovesForPiece(board, r, c);
+        for (const [toR, toC] of moves) {
+          const score = evaluateMove(board, r, c, toR, toC, aiColor);
+          possibleMoves.push({
+            from: [r, c],
+            to: [toR, toC],
+            score,
+          });
+        }
+      }
+    }
+  }
+
+  if (possibleMoves.length === 0) return null;
+
+  // Sort by score and pick the best one
+  possibleMoves.sort((a, b) => b.score - a.score);
+  return {
+    from: possibleMoves[0].from,
+    to: possibleMoves[0].to,
+  };
+}
 
 export const mockAPI = {
   async createGame(
@@ -316,23 +415,10 @@ export const mockAPI = {
           currentGameState = createMockGameState();
         }
 
-        // Make a random move for AI
-        const possibleMoves: Array<{ from: [number, number]; to: [number, number] }> = [];
+        // Get the best move for AI using evaluation function
+        const move = getBestAIMove(currentGameState.board, currentGameState.current_turn);
 
-        for (let r = 0; r < 10; r++) {
-          for (let c = 0; c < 9; c++) {
-            const piece = currentGameState.board[r]?.[c];
-            if (piece && piece.color === currentGameState.current_turn) {
-              const moves = getLegalMovesForPiece(currentGameState.board, r, c);
-              for (const [toR, toC] of moves) {
-                possibleMoves.push({ from: [r, c], to: [toR, toC] });
-              }
-            }
-          }
-        }
-
-        if (possibleMoves.length > 0) {
-          const move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+        if (move) {
           const piece = currentGameState.board[move.from[0]][move.from[1]];
           const captured = currentGameState.board[move.to[0]][move.to[1]];
 
