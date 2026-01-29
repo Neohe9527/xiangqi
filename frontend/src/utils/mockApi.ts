@@ -242,6 +242,9 @@ function getLegalMovesForPiece(
   return moves;
 }
 
+// Store game state for mock API
+let currentGameState: GameState | null = null;
+
 export const mockAPI = {
   async createGame(
     _aiType: AIType = 'alphabeta',
@@ -249,10 +252,10 @@ export const mockAPI = {
   ): Promise<{ game_id: string; game_state: GameState; ai_config: AIConfig }> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const gameState = createMockGameState();
+        currentGameState = createMockGameState();
         resolve({
-          game_id: gameState.game_id,
-          game_state: gameState,
+          game_id: currentGameState.game_id,
+          game_state: currentGameState,
           ai_config: {
             name: 'Mock AI',
             description: 'Mock AI for demonstration',
@@ -264,24 +267,41 @@ export const mockAPI = {
   },
 
   async getGame(): Promise<GameState> {
-    return createMockGameState();
+    return currentGameState || createMockGameState();
   },
 
   async makeMove(
     _gameId: string,
-    _fromRow: number,
-    _fromCol: number,
-    _toRow: number,
-    _toCol: number
+    fromRow: number,
+    fromCol: number,
+    toRow: number,
+    toCol: number
   ): Promise<{ success: boolean; move_info: unknown; game_state: GameState }> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const gameState = createMockGameState();
-        gameState.current_turn = gameState.current_turn === 'red' ? 'black' : 'red';
+        if (!currentGameState) {
+          currentGameState = createMockGameState();
+        }
+
+        // Make the move
+        const piece = currentGameState.board[fromRow]?.[toCol];
+        currentGameState.board[toRow][toCol] = currentGameState.board[fromRow][fromCol];
+        currentGameState.board[fromRow][fromCol] = null;
+
+        // Update game state
+        currentGameState.current_turn = currentGameState.current_turn === 'red' ? 'black' : 'red';
+        currentGameState.last_move = { from: [fromRow, fromCol], to: [toRow, toCol] };
+        currentGameState.move_count += 1;
+
+        // If a piece was captured, add it to captured pieces
+        if (piece) {
+          currentGameState.captured_pieces.push(piece);
+        }
+
         resolve({
           success: true,
           move_info: {},
-          game_state: gameState,
+          game_state: currentGameState,
         });
       }, 300);
     });
@@ -292,13 +312,46 @@ export const mockAPI = {
   ): Promise<{ success: boolean; move_info: unknown; thinking_info: unknown; game_state: GameState }> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const gameState = createMockGameState();
-        gameState.current_turn = 'red';
+        if (!currentGameState) {
+          currentGameState = createMockGameState();
+        }
+
+        // Make a random move for AI
+        const possibleMoves: Array<{ from: [number, number]; to: [number, number] }> = [];
+
+        for (let r = 0; r < 10; r++) {
+          for (let c = 0; c < 9; c++) {
+            const piece = currentGameState.board[r]?.[c];
+            if (piece && piece.color === currentGameState.current_turn) {
+              const moves = getLegalMovesForPiece(currentGameState.board, r, c);
+              for (const [toR, toC] of moves) {
+                possibleMoves.push({ from: [r, c], to: [toR, toC] });
+              }
+            }
+          }
+        }
+
+        if (possibleMoves.length > 0) {
+          const move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+          const piece = currentGameState.board[move.from[0]][move.from[1]];
+          const captured = currentGameState.board[move.to[0]][move.to[1]];
+
+          currentGameState.board[move.to[0]][move.to[1]] = piece;
+          currentGameState.board[move.from[0]][move.from[1]] = null;
+          currentGameState.current_turn = currentGameState.current_turn === 'red' ? 'black' : 'red';
+          currentGameState.last_move = { from: move.from, to: move.to };
+          currentGameState.move_count += 1;
+
+          if (captured) {
+            currentGameState.captured_pieces.push(captured);
+          }
+        }
+
         resolve({
           success: true,
           move_info: {},
           thinking_info: { depth: 5, nodes_evaluated: 1000, score: 0 },
-          game_state: gameState,
+          game_state: currentGameState,
         });
       }, 1000);
     });
@@ -310,9 +363,11 @@ export const mockAPI = {
   ): Promise<{ success: boolean; game_state: GameState }> {
     return new Promise((resolve) => {
       setTimeout(() => {
+        // Reset to initial state for mock
+        currentGameState = createMockGameState();
         resolve({
           success: true,
-          game_state: createMockGameState(),
+          game_state: currentGameState,
         });
       }, 300);
     });
@@ -325,8 +380,10 @@ export const mockAPI = {
   ): Promise<{ legal_moves: [number, number][] }> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const gameState = createMockGameState();
-        const moves = getLegalMovesForPiece(gameState.board, row, col);
+        if (!currentGameState) {
+          currentGameState = createMockGameState();
+        }
+        const moves = getLegalMovesForPiece(currentGameState.board, row, col);
         resolve({
           legal_moves: moves,
         });
