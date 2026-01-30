@@ -266,82 +266,309 @@ const PIECE_VALUES: Record<string, number> = {
   'P': 100,   // 兵/卒
 };
 
-// Evaluate a move: returns score (higher is better for AI)
-function evaluateMove(
+// Position values for pieces (simplified from professional engines)
+const POSITION_VALUES: Record<string, number[][]> = {
+  'R': [ // 车 - 优先占据中路
+    [206, 208, 207, 213, 214, 213, 207, 208, 206],
+    [206, 212, 209, 216, 233, 216, 209, 212, 206],
+    [206, 208, 207, 214, 216, 214, 207, 208, 206],
+    [206, 213, 213, 216, 216, 216, 213, 213, 206],
+    [208, 211, 211, 214, 215, 214, 211, 211, 208],
+    [208, 212, 212, 214, 215, 214, 212, 212, 208],
+    [204, 209, 204, 212, 214, 212, 204, 209, 204],
+    [198, 208, 204, 212, 212, 212, 204, 208, 198],
+    [200, 208, 206, 212, 200, 212, 206, 208, 200],
+    [194, 206, 204, 212, 200, 212, 204, 206, 194],
+  ],
+  'H': [ // 马 - 优先占据中心
+    [90, 90, 90, 96, 90, 96, 90, 90, 90],
+    [90, 96, 103, 97, 94, 97, 103, 96, 90],
+    [92, 98, 99, 103, 99, 103, 99, 98, 92],
+    [93, 108, 100, 107, 100, 107, 100, 108, 93],
+    [90, 100, 99, 103, 104, 103, 99, 100, 90],
+    [90, 98, 101, 102, 103, 102, 101, 98, 90],
+    [92, 94, 98, 95, 98, 95, 98, 94, 92],
+    [93, 92, 94, 95, 92, 95, 94, 92, 93],
+    [85, 90, 92, 93, 78, 93, 92, 90, 85],
+    [88, 85, 90, 88, 90, 88, 90, 85, 88],
+  ],
+  'C': [ // 炮 - 优先占据中路和河口
+    [100, 100, 96, 91, 90, 91, 96, 100, 100],
+    [98, 98, 96, 92, 89, 92, 96, 98, 98],
+    [97, 97, 96, 91, 92, 91, 96, 97, 97],
+    [96, 99, 99, 98, 100, 98, 99, 99, 96],
+    [96, 96, 96, 96, 100, 96, 96, 96, 96],
+    [95, 96, 99, 96, 100, 96, 99, 96, 95],
+    [96, 96, 96, 96, 96, 96, 96, 96, 96],
+    [97, 96, 100, 99, 101, 99, 100, 96, 97],
+    [96, 97, 98, 98, 98, 98, 98, 97, 96],
+    [96, 96, 97, 99, 99, 99, 97, 96, 96],
+  ],
+  'P': [ // 兵/卒 - 过河后价值大幅提升
+    [9, 9, 9, 11, 13, 11, 9, 9, 9],
+    [19, 24, 34, 42, 44, 42, 34, 24, 19],
+    [19, 24, 32, 37, 37, 37, 32, 24, 19],
+    [19, 23, 27, 29, 30, 29, 27, 23, 19],
+    [14, 18, 20, 27, 29, 27, 20, 18, 14],
+    [7, 0, 13, 0, 16, 0, 13, 0, 7],
+    [7, 0, 7, 0, 15, 0, 7, 0, 7],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  ],
+};
+
+// Evaluate a position from AI's perspective
+function evaluatePosition(
   board: (Piece | null)[][],
-  fromRow: number,
-  fromCol: number,
-  toRow: number,
-  toCol: number,
   aiColor: 'red' | 'black'
 ): number {
   let score = 0;
 
-  // Check if this move captures a piece
-  const targetPiece = board[toRow]?.[toCol];
-  if (targetPiece && targetPiece.color !== aiColor) {
-    // Prioritize capturing valuable pieces
-    score += (PIECE_VALUES[targetPiece.type] || 0) * 10;
-  }
-
-  // Prefer moving pieces that are under attack (defensive)
-  const piece = board[fromRow]?.[fromCol];
-  if (piece) {
-    // Bonus for moving pieces forward (aggressive)
-    if (aiColor === 'red' && toRow < fromRow) {
-      score += 5;
-    } else if (aiColor === 'black' && toRow > fromRow) {
-      score += 5;
-    }
-
-    // Bonus for protecting the king
-    if (piece.type === 'K') {
-      score += 1000; // King moves are important
-    }
-  }
-
-  // Add some randomness to avoid predictable play
-  score += Math.random() * 10;
-
-  return score;
-}
-
-// Get best move for AI
-function getBestAIMove(
-  board: (Piece | null)[][],
-  aiColor: 'red' | 'black'
-): { from: [number, number]; to: [number, number] } | null {
-  const possibleMoves: Array<{
-    from: [number, number];
-    to: [number, number];
-    score: number;
-  }> = [];
-
+  // 1. Material value (35% weight)
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 9; c++) {
       const piece = board[r]?.[c];
-      if (piece && piece.color === aiColor) {
-        const moves = getLegalMovesForPiece(board, r, c);
-        for (const [toR, toC] of moves) {
-          const score = evaluateMove(board, r, c, toR, toC, aiColor);
-          possibleMoves.push({
-            from: [r, c],
-            to: [toR, toC],
-            score,
-          });
+      if (piece) {
+        const value = PIECE_VALUES[piece.type] || 0;
+        if (piece.color === aiColor) {
+          score += value;
+        } else {
+          score -= value;
         }
       }
     }
   }
 
-  if (possibleMoves.length === 0) return null;
+  // 2. Position value (30% weight)
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r]?.[c];
+      if (piece && POSITION_VALUES[piece.type]) {
+        // Flip row for black pieces
+        const row = piece.color === aiColor ? r : 9 - r;
+        const posValue = POSITION_VALUES[piece.type][row]?.[c] || 0;
+        if (piece.color === aiColor) {
+          score += posValue * 0.3;
+        } else {
+          score -= posValue * 0.3;
+        }
+      }
+    }
+  }
 
-  // Sort by score and pick the best one
-  possibleMoves.sort((a, b) => b.score - a.score);
-  return {
-    from: possibleMoves[0].from,
-    to: possibleMoves[0].to,
-  };
+  // 3. King safety (15% weight)
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r]?.[c];
+      if (piece?.type === 'K') {
+        // Count protection around king
+        let protection = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nr < 10 && nc >= 0 && nc < 9) {
+              const neighbor = board[nr]?.[nc];
+              if (neighbor?.color === piece.color) {
+                protection++;
+              }
+            }
+          }
+        }
+        const safetyBonus = protection * 5;
+        if (piece.color === aiColor) {
+          score += safetyBonus;
+        } else {
+          score -= safetyBonus;
+        }
+      }
+    }
+  }
+
+  // 4. Aggression (15% weight) - control enemy half
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r]?.[c];
+      if (piece) {
+        const inEnemyHalf = aiColor === 'red' ? r <= 4 : r >= 5;
+        if (inEnemyHalf) {
+          let aggressionBonus = 15;
+          if (piece.type === 'P') aggressionBonus = 30; // Pawns in enemy half are valuable
+          if (piece.color === aiColor) {
+            score += aggressionBonus;
+          } else {
+            score -= aggressionBonus;
+          }
+        }
+      }
+    }
+  }
+
+  // 5. Center control (10% weight)
+  for (let r = 0; r < 10; r++) {
+    for (let c = 3; c <= 5; c++) {
+      const piece = board[r]?.[c];
+      if (piece) {
+        if (piece.color === aiColor) {
+          score += 10;
+        } else {
+          score -= 10;
+        }
+      }
+    }
+  }
+
+  return score;
+}
+
+// Alpha-Beta search with depth limit
+function alphaBetaSearch(
+  board: (Piece | null)[][],
+  depth: number,
+  alpha: number,
+  beta: number,
+  isMaximizing: boolean,
+  aiColor: 'red' | 'black'
+): number {
+  // Terminal node - evaluate position
+  if (depth === 0) {
+    return evaluatePosition(board, aiColor);
+  }
+
+  const currentColor = isMaximizing ? aiColor : (aiColor === 'red' ? 'black' : 'red');
+  const moves = getAllLegalMoves(board, currentColor);
+
+  if (moves.length === 0) {
+    // No legal moves - stalemate or checkmate
+    return evaluatePosition(board, aiColor);
+  }
+
+  // Sort moves by heuristic (captures first, then aggressive moves)
+  moves.sort((a, b) => {
+    const aScore = getMoveScore(board, a, aiColor);
+    const bScore = getMoveScore(board, b, aiColor);
+    return bScore - aScore;
+  });
+
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const captured = board[move.to[0]][move.to[1]];
+      board[move.to[0]][move.to[1]] = board[move.from[0]][move.from[1]];
+      board[move.from[0]][move.from[1]] = null;
+
+      const eval_ = alphaBetaSearch(board, depth - 1, alpha, beta, false, aiColor);
+
+      board[move.from[0]][move.from[1]] = board[move.to[0]][move.to[1]];
+      board[move.to[0]][move.to[1]] = captured;
+
+      maxEval = Math.max(maxEval, eval_);
+      alpha = Math.max(alpha, eval_);
+      if (beta <= alpha) break; // Beta cutoff
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of moves) {
+      const captured = board[move.to[0]][move.to[1]];
+      board[move.to[0]][move.to[1]] = board[move.from[0]][move.from[1]];
+      board[move.from[0]][move.from[1]] = null;
+
+      const eval_ = alphaBetaSearch(board, depth - 1, alpha, beta, true, aiColor);
+
+      board[move.from[0]][move.from[1]] = board[move.to[0]][move.to[1]];
+      board[move.to[0]][move.to[1]] = captured;
+
+      minEval = Math.min(minEval, eval_);
+      beta = Math.min(beta, eval_);
+      if (beta <= alpha) break; // Alpha cutoff
+    }
+    return minEval;
+  }
+}
+
+// Get heuristic score for move ordering
+function getMoveScore(
+  board: (Piece | null)[][],
+  move: { from: [number, number]; to: [number, number] },
+  aiColor: 'red' | 'black'
+): number {
+  let score = 0;
+
+  // Captures are high priority
+  const target = board[move.to[0]][move.to[1]];
+  if (target && target.color !== aiColor) {
+    score += (PIECE_VALUES[target.type] || 0) * 10;
+  }
+
+  // Aggressive moves (moving into enemy half)
+  if (aiColor === 'red' && move.to[0] <= 4) {
+    score += 50;
+  } else if (aiColor === 'black' && move.to[0] >= 5) {
+    score += 50;
+  }
+
+  // Center control
+  if (move.to[1] >= 3 && move.to[1] <= 5) {
+    score += 30;
+  }
+
+  return score;
+}
+
+// Get all legal moves for a color
+function getAllLegalMoves(
+  board: (Piece | null)[][],
+  color: 'red' | 'black'
+): Array<{ from: [number, number]; to: [number, number] }> {
+  const moves: Array<{ from: [number, number]; to: [number, number] }> = [];
+
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r]?.[c];
+      if (piece && piece.color === color) {
+        const pieceMoves = getLegalMovesForPiece(board, r, c);
+        for (const [toR, toC] of pieceMoves) {
+          moves.push({ from: [r, c], to: [toR, toC] });
+        }
+      }
+    }
+  }
+
+  return moves;
+}
+
+// Get best move using Alpha-Beta search
+function getBestAIMove(
+  board: (Piece | null)[][],
+  aiColor: 'red' | 'black',
+  depth: number = 2
+): { from: [number, number]; to: [number, number] } | null {
+  const moves = getAllLegalMoves(board, aiColor);
+  if (moves.length === 0) return null;
+
+  let bestMove = moves[0];
+  let bestScore = -Infinity;
+
+  for (const move of moves) {
+    const captured = board[move.to[0]][move.to[1]];
+    board[move.to[0]][move.to[1]] = board[move.from[0]][move.from[1]];
+    board[move.from[0]][move.from[1]] = null;
+
+    const score = alphaBetaSearch(board, depth - 1, -Infinity, Infinity, false, aiColor);
+
+    board[move.from[0]][move.from[1]] = board[move.to[0]][move.to[1]];
+    board[move.to[0]][move.to[1]] = captured;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
+  }
+
+  return bestMove;
 }
 
 export const mockAPI = {
