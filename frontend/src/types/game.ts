@@ -55,7 +55,7 @@ export interface AIConfig {
   time_limit?: number;
 }
 
-export type AIType = 'random' | 'greedy' | 'minimax' | 'alphabeta';
+export type AIType = 'random' | 'greedy' | 'minimax' | 'alphabeta' | 'master';
 
 // WebSocket message types
 export interface WSMessage {

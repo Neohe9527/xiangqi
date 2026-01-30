@@ -35,8 +35,16 @@ AI_CONFIGS = {
         'name': '深算国手',
         'difficulty': 4,
         'description': 'Alpha-Beta剪枝，强大的求胜欲望',
-        'depth': 6,
-        'time_limit': 15
+        'depth': 8,
+        'time_limit': 30
+    },
+    'master': {
+        'name': '绝世棋圣',
+        'difficulty': 5,
+        'description': '最强AI，深度搜索+高级优化，挑战极限',
+        'depth': 10,
+        'time_limit': 60,
+        'quiescence_depth': 8
     }
 }
 

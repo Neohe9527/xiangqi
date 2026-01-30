@@ -707,14 +707,29 @@ export const mockAPI = {
   async getAITypes(): Promise<Record<string, AIConfig>> {
     return {
       random: {
-        name: 'Random',
-        description: 'Random move selection',
-        difficulty: 0,
+        name: '新手小卒',
+        description: '随机走子',
+        difficulty: 1,
+      },
+      greedy: {
+        name: '贪心将军',
+        description: '优先吃子',
+        difficulty: 2,
+      },
+      minimax: {
+        name: '谋略军师',
+        description: '有战术深度',
+        difficulty: 3,
       },
       alphabeta: {
-        name: 'Alpha-Beta',
-        description: 'Alpha-Beta pruning algorithm',
-        difficulty: 1,
+        name: '深算国手',
+        description: '高级AI',
+        difficulty: 4,
+      },
+      master: {
+        name: '绝世棋圣',
+        description: '最强AI，挑战极限',
+        difficulty: 5,
       },
     };
   },

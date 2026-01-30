@@ -13,6 +13,7 @@ from app.ai.random_ai import RandomAI
 from app.ai.greedy_ai import GreedyAI
 from app.ai.minimax_ai import MinimaxAI
 from app.ai.alphabeta_ai import AlphaBetaAI
+from app.ai.master_ai import MasterAI
 from app import config
 
 
@@ -121,12 +122,20 @@ class GameSessionManager:
             elif ai_type == 'minimax':
                 ai_config = config.AI_CONFIGS.get('minimax', {})
                 self._ai_cache[cache_key] = MinimaxAI(color, depth=ai_config.get('depth', 3))
+            elif ai_type == 'master':
+                ai_config = config.AI_CONFIGS.get('master', {})
+                self._ai_cache[cache_key] = MasterAI(
+                    color,
+                    depth=ai_config.get('depth', 10),
+                    time_limit=ai_config.get('time_limit', 60),
+                    quiescence_depth=ai_config.get('quiescence_depth', 8)
+                )
             else:  # alphabeta
                 ai_config = config.AI_CONFIGS.get('alphabeta', {})
                 self._ai_cache[cache_key] = AlphaBetaAI(
                     color,
-                    depth=ai_config.get('depth', 6),
-                    time_limit=ai_config.get('time_limit', 15)
+                    depth=ai_config.get('depth', 8),
+                    time_limit=ai_config.get('time_limit', 30)
                 )
 
         return self._ai_cache[cache_key]

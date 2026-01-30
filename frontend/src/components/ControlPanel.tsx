@@ -17,7 +17,8 @@ const AI_OPTIONS: { value: AIType; label: string; description: string }[] = [
   { value: 'random', label: '新手小卒', description: '随机走子' },
   { value: 'greedy', label: '贪心将军', description: '优先吃子' },
   { value: 'minimax', label: '谋略军师', description: '有战术深度' },
-  { value: 'alphabeta', label: '深算国手', description: '最强AI' },
+  { value: 'alphabeta', label: '深算国手', description: '高级AI' },
+  { value: 'master', label: '绝世棋圣', description: '最强AI，挑战极限' },
 ];
 
 export function ControlPanel({ onNewGame, onUndo, isLoading, isAIThinking }: ControlPanelProps) {
